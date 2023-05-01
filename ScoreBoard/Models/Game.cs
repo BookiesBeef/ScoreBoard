@@ -3,5 +3,6 @@
 
 public record Game(Team HomeTeam, Team AwayTeam, DateTime StartTime)
 {
-    public int TotalScore => HomeTeam.Score + AwayTeam.Score;
+    public string Id => $"{HomeTeam?.Name}-{AwayTeam?.Name}".ToLower();
+    public uint TotalScore => HomeTeam.Score + AwayTeam.Score;
 }

@@ -1,4 +1,5 @@
 using AutoFixture;
+using AutoFixture.AutoMoq;
 using Moq;
 using ScoreBoard.Interfaces;
 using ScoreBoard.Models;
@@ -17,91 +18,104 @@ public class ScoreBoardServiceTests
     public async Task AddGame_ShouldPersist_WhenGameNotExists()
     {
         //Arrange
-        var fixture = new Fixture();
-        var game = fixture.Create<Game>();
-        var scoreBoardMock = fixture.Freeze<Mock<IScoreBoardService>>();
-        scoreBoardMock.Setup(x => x.AddGame(It.IsAny<string>(), It.IsAny<string>()));
+        var fixture = new Fixture().Customize(new AutoMoqCustomization());
 
-        var repositoryMock = new Mock<IScoreBoardRepository>();
-        repositoryMock.Setup(x => x.AddGame(It.IsAny<Game>()));
-        repositoryMock.Setup(x => x.GetGame(It.IsAny<string>()));
+        var game = GameBuilder.Init(TeamBuilder.Init("Spain").Build(),
+                                    TeamBuilder.Init("Sweden").Build())
+                              .Build();
+
+        var repositoryMock = fixture.Freeze<Mock<IScoreBoardRepository>>();
+        repositoryMock.Setup(x => x.CreateGame(It.IsAny<Game>()));
+
+        var sut = fixture.Create<Services.ScoreBoard>();
 
         //Act
-        await scoreBoardMock.Object.AddGame(game.HomeTeam.Name, game.AwayTeam.Name);
+        await sut.AddGame(game.HomeTeam.Name, game.AwayTeam.Name);
 
         //Assert
-        repositoryMock.Verify(sb => sb.AddGame(game), Times.Exactly(2));
+        repositoryMock.Verify(repo => repo.CreateGame(It.IsAny<Game>()), Times.Once);
     }
 
-
-
     [Fact]
-    public async Task AddGame_ShouldThrow_WhenGameExists()
+    public async Task AddGame_ShouldReturnEmpty_WhenGameExists()
     {
         //Arrange
-        var fixture = new Fixture();
-        var game = fixture.Create<Game>();
-        var scoreBoardMock = fixture.Freeze<Mock<IScoreBoardService>>();
-        scoreBoardMock.Setup(x => x.AddGame(It.IsAny<string>(), It.IsAny<string>()));
+        var fixture = new Fixture().Customize(new AutoMoqCustomization());
+        var game = GameBuilder.Init(TeamBuilder.Init("Spain").Build(),
+                                    TeamBuilder.Init("Sweden").Build())
+                              .Build();
 
-        var repositoryMock = new Mock<IScoreBoardRepository>();
-        repositoryMock.Setup(x => x.AddGame(It.IsAny<Game>()));
-        repositoryMock.Setup(x => x.GetGame(It.IsAny<string>())).ReturnsAsync(game);
+        var repositoryMock = fixture.Freeze<Mock<IScoreBoardRepository>>();
+        repositoryMock.Setup(x => x.CreateGame(It.IsAny<Game>()));
+        repositoryMock.Setup(x => x.GetGames()).ReturnsAsync(new List<Game>() { game });
+
+        var sut = fixture.Create<Services.ScoreBoard>();
 
         //Act
-        await scoreBoardMock.Object.AddGame(game.HomeTeam.Name, game.AwayTeam.Name);
+        var result = await sut.AddGame(game.HomeTeam.Name, game.AwayTeam.Name);
 
         //Assert
-        await Assert.ThrowsAsync<ArgumentException>(() => scoreBoardMock.Object.AddGame(game.HomeTeam.Name, game.AwayTeam.Name));
+        Assert.True(result == string.Empty);
     }
 
     [Fact]
     public async Task UpdateScore_ShouldUpdateBothTeamsScore()
     {
         //Arrange
-        var fixture = new Fixture();
-        var game = fixture.Create<Game>();
-        var scoreBoardMock = fixture.Freeze<Mock<IScoreBoardService>>();
-        scoreBoardMock.Setup(x => x.AddGame(It.IsAny<string>(), It.IsAny<string>()));
+        var fixture = new Fixture().Customize(new AutoMoqCustomization());
+
+        var game = GameBuilder.Init(TeamBuilder.Init("Spain").Build(),
+                                    TeamBuilder.Init("Sweden").Build())
+                              .Build();
+
+        var repositoryMock = fixture.Freeze<Mock<IScoreBoardRepository>>();
+        repositoryMock.Setup(x => x.GetGame(It.IsAny<string>()));
+        repositoryMock.Setup(x => x.GetGames());
+        repositoryMock.Setup(x => x.UpdateGame(It.IsAny<Game>()));
+
+        var sut = fixture.Create<Services.ScoreBoard>();
+
+        _ = await sut.AddGame(game.HomeTeam.Name, game.AwayTeam.Name);
 
         //Act
-        await scoreBoardMock.Object.AddGame(game.HomeTeam.Name, game.AwayTeam.Name);
-        await scoreBoardMock.Object.UpdateGame(game);
+        var updated = GameBuilder.Init(TeamBuilder.Init("Spain").WithScore(1).Build(),
+                                       TeamBuilder.Init("Sweden").WithScore(3).Build())
+                                 .Build();
+
+        await sut.UpdateGame(updated);
 
         //Assert
-        scoreBoardMock.Verify(service => service.AddGame(game.HomeTeam.Name, game.AwayTeam.Name), Times.Once);
-        scoreBoardMock.Verify(service => service.UpdateGame(game), Times.Once);
+        repositoryMock.Verify(service => service.UpdateGame(It.IsAny<Game>()), Times.Once);
     }
-
 
     [Fact]
     public async Task FinishGame_ShouldRemoveGame()
     {
         //Arrange
-        var fixture = new Fixture();
-        var game = fixture.Create<Game>();
-        var scoreBoardMock = fixture.Freeze<Mock<IScoreBoardService>>();
-        var sut = scoreBoardMock.Object;
+        var fixture = new Fixture().Customize(new AutoMoqCustomization());
+        var game = GameBuilder.Init(TeamBuilder.Init("Spain").WithScore(1).Build(),
+                                    TeamBuilder.Init("Sweden").WithScore(3).Build())
+                              .Build();
+
+        var repositoryMock = fixture.Freeze<Mock<IScoreBoardRepository>>();
+        repositoryMock.Setup(x => x.DeleteGame(It.IsAny<string>()));
+
+        var sut = fixture.Create<Services.ScoreBoard>();
 
         //Act
-        await sut.RemoveGame(game);
+        await sut.RemoveGame(game.Id);
         var current = await sut.GetGames();
 
         //Assert
-        scoreBoardMock.Verify(service => service.RemoveGame(game), Times.Once);
-        Assert.True(current != null);
-        Assert.True(current.Count == 0);
+        repositoryMock.Verify(repo => repo.DeleteGame(game.Id), Times.Once);
+        Assert.True(current?.Count == 0);
     }
 
     [Fact]
     public async Task GetGames_ShouldReturnOrderedCollection()
     {
         //Arrange
-        var fixture = new Fixture();
-        var game = fixture.Create<Game>();
-        var scoreBoardMock = fixture.Freeze<Mock<IScoreBoardService>>();
-        scoreBoardMock.Setup(mock => mock.GetGames());
-
+        var fixture = new Fixture().Customize(new AutoMoqCustomization());
 
         var game1 = GameBuilder.Init(TeamBuilder.Init("Spain").WithScore(1).Build(),
                                      TeamBuilder.Init("Sweden").WithScore(3).Build())
@@ -115,17 +129,10 @@ public class ScoreBoardServiceTests
                                      TeamBuilder.Init("England").WithScore(3).Build())
                                .Build();
 
-        var games = new List<Game>
-       {
-           game1,
-           game2,
-           game3
-       };
+        var repositoryMock = fixture.Freeze<Mock<IScoreBoardRepository>>();
+        repositoryMock.Setup(m => m.GetGames()).ReturnsAsync(new List<Game> { game1, game2, game3 });
 
-        var repositoryMock = new Mock<IScoreBoardRepository>();
-        repositoryMock.Setup(m => m.GetGames()).ReturnsAsync(games);
-
-        var sut = scoreBoardMock.Object;
+        var sut = fixture.Create<Services.ScoreBoard>();
 
         //Act
         var orderedGames = await sut.GetGames();

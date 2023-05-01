@@ -5,8 +5,8 @@ namespace ScoreBoard.Interfaces;
 
 public interface IScoreBoardService
 {
-    Task AddGame(string local, string away);
-    Task RemoveGame(Game game);
+    Task<string> AddGame(string local, string away);
+    Task RemoveGame(string id);
     Task UpdateGame(Game game);
     Task<List<Game>> GetGames();
 }

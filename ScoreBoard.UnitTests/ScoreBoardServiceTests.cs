@@ -98,7 +98,7 @@ public class ScoreBoardServiceTests
                               .Build();
 
         var repositoryMock = fixture.Freeze<Mock<IScoreBoardRepository>>();
-        repositoryMock.Setup(x => x.DeleteGame(It.IsAny<string>()));
+        repositoryMock.Setup(x => x.DeleteGame(It.IsAny<string>())).ReturnsAsync(true);
 
         var sut = fixture.Create<Services.ScoreBoard>();
 
